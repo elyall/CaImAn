@@ -1219,14 +1219,9 @@ def load(file_name,fr=30,start_time=0,meta_data=None,subindices=None,shape=None,
 
         elif extension == '.sbx':
             if subindices is not None:
-                # nframes = subindices.step
-                # return movie(sbxreadskip(file_name[:-4],skip = subindices.step), fr=fr)
                 if isinstance(subindices,np.float64):
                     subindices=subindices.astype(int)
-                    print(subindices.dtype)
-                elif isinstance(subindices,range):
-                    subindices=subindices.step
-                elif isinstance(subindices,slice):
+                elif isinstance(subindices,range) or isinstance(subindices,slice):
                     subindices=subindices.step
                 return movie(sbxreadskip(file_name[:-4],skip = subindices), fr=fr)
             else:
