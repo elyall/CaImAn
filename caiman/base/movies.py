@@ -1219,8 +1219,16 @@ def load(file_name,fr=30,start_time=0,meta_data=None,subindices=None,shape=None,
 
         elif extension == '.sbx':
             if subindices is not None:
-                nframes = subindices.step
-                return movie(sbxreadskip(file_name[:-4],skip = subindices.step), fr=fr)
+                # nframes = subindices.step
+                # return movie(sbxreadskip(file_name[:-4],skip = subindices.step), fr=fr)
+                if isinstance(subindices,np.float64):
+                    subindices=subindices.astype(int)
+                    print(subindices.dtype)
+                elif isinstance(subindices,range):
+                    subindices=subindices.step
+                elif isinstance(subindices,slice):
+                    subindices=subindices.step
+                return movie(sbxreadskip(file_name[:-4],skip = subindices), fr=fr)
             else:
                 print('sbx')
                 return movie(sbxread(file_name[:-4],k = 0, n_frames = np.inf), fr=fr)
@@ -1389,7 +1397,7 @@ def sbxreadskip(filename,skip):
     max_idx = os.path.getsize(filename + '.sbx')/info['recordsPerBuffer']/info['sz'][1]*factor/4-1
 
     # Paramters
-    N = max_idx+1; #Last frame
+    N = int(max_idx+1); #Last frame
 
 
 
@@ -1428,22 +1436,31 @@ def sbxshape(filename):
     info = loadmat_sbx(filename + '.mat')['info']
     #print info.keys()
 
-    # Defining number of channels/size factor
+    # Determine number of channels
     if info['channels'] == 1:
-        info['nChan'] = 2; factor = 1
-    elif info['channels'] == 2:
-        info['nChan'] = 1; factor = 2
-    elif info['channels'] == 3:
-        info['nChan'] = 1; factor = 2
+        C = 2
+    else:
+        C = 1
+
+    # Determine frame width
+    W = int(info['sz'][1])
+
+    # Determine frame height
+    if info['scanmode'] == 0:
+        H = info['recordsPerBuffer']*2
+    else: # scanmode == 1
+        H = info['recordsPerBuffer']
+
+    # Determine frame depth
+    D = info['otwave'].size
+    if D == 0:
+        D = 1
 
     # Determine number of frames in whole file
-    max_idx = os.path.getsize(filename + '.sbx')/info['recordsPerBuffer']/info['sz'][1]*factor/4-1
+    N = int(os.path.getsize(filename + '.sbx')/(W*H*D*C*2))
 
-    N = max_idx+1; #Last frame
+    x = (W, H, N, D, C)
 
-    x = (int(info['sz'][1]), int(info['recordsPerBuffer']), int(N))
-
-    
     return x
 
 def to_3D(mov2D,shape,order='F'):
