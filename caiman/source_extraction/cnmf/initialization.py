@@ -594,7 +594,7 @@ def imblur(Y, sig=5, siz=11, nDimBlur=None, kernel=None, opencv = True):
         if opencv and nDimBlur == 2:
             if X.ndim > 2:
                 for frame in range(X.shape[-1]):
-                    X[:,:,frame] = cv2.GaussianBlur(X[:,:,frame],tuple(siz),sig[0],sig[1],cv2.BORDER_CONSTANT,0)               
+                    X[:,:,frame] = cv2.GaussianBlur(X[:,:,frame],tuple(siz),sigmaX=sig[0],sigmaY=sig[1],borderType=cv2.BORDER_CONSTANT)               
                 
             else:
                 X = cv2.GaussianBlur(X,tuple(siz),sig[0],sig[1],cv2.BORDER_CONSTANT,0) 
