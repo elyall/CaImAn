@@ -43,7 +43,8 @@ def load_memmap(filename):
     @throws exception if not in mmap
 
     """
-    if os.path.splitext(filename)[1] == '.mmap':
+    extension = os.path.splitext(filename)[1]
+    if extension == '.mmap':
 
         file_to_load = filename
 
@@ -57,6 +58,15 @@ def load_memmap(filename):
             d1 * d2 * d3, T), dtype=np.float32, order=order)
 
         return (Yr, (d1, d2 ), T) if d3 == 1 else (Yr, (d1, d2, d3), T)
+
+    elif extension == '.sbx':
+
+        Dims = cm.base.movies.sbxshape(filename)
+        d1,d2,T,d3,C = Dims
+        order = 'F'
+
+        Yr = np.memmap(filename, mode='r', shape=(
+            C * d1 * d2 * d3, T), dtype=np.uint16, order=order)
 
     else:
         raise Exception('Not implemented consistently')
