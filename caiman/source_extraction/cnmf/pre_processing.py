@@ -151,13 +151,13 @@ def get_noise_fft(Y, noise_range = [0.25,0.5], noise_method = 'logmexp', max_num
         xdft = np.fft.rfft(Y,axis=-1)
         psdx = (old_div(1.,T))*abs(xdft)**2
         psdx[...,1:] *= 2
-        sn = mean_psd(psdx[...,ind], method = noise_method)
+        sn = mean_psd(psdx[...,ind[:psdx.shape[-1]]], method = noise_method)
 
     else:
         xdft = np.fliplr(np.fft.rfft(Y))
         psdx = (old_div(1.,T))*(xdft**2)
         psdx[1:] *=2
-        sn = mean_psd(psdx[ind], method = noise_method)
+        sn = mean_psd(psdx[ind[:psdx.shape[0]]], method = noise_method)
 
     return sn, psdx
 
@@ -253,9 +253,8 @@ def fft_psd_parallel(Y,sn_s,i,num_pixels,**kwargs):
 
     Parameters:
     -----------
-
-    Y: ndarray
-        input movie (n_pixels x Time), can be also memory mapped file
+	Y: ndarray
+		input movie (n_pixels x Time), can be also memory mapped file
 
     sn_s: ndarray (memory mapped)
         file where to store the results of computation.
@@ -268,6 +267,7 @@ def fft_psd_parallel(Y,sn_s,i,num_pixels,**kwargs):
 
     **kwargs: dict
         arguments to be passed to get_noise_fft
+        
 
      Returns:
      -------

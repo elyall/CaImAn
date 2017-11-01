@@ -24,8 +24,10 @@ from scipy.sparse import issparse, spdiags, coo_matrix, csc_matrix
 from matplotlib.widgets import Slider
 from ..base.rois import com
 from scipy.ndimage.measurements import center_of_mass
+from scipy.ndimage.filters import median_filter
 import matplotlib.cm as cm
 import matplotlib as mpl
+from math import sqrt, ceil
 try:
     import bokeh
     import bokeh.plotting as bpl
@@ -121,7 +123,7 @@ def view_patches(Yr, A, C, b, f, d1, d2, YrA=None, secs=1):
             ax2.set_title('Temporal background ' + str(i - nr + 1))
 
 
-def nb_view_patches(Yr, A, C, b, f, d1, d2, image_neurons=None, thr=0.99, denoised_color=None,cmap='jet'):
+def nb_view_patches(Yr, A, C, b, f, d1, d2, YrA = None, image_neurons=None, thr=0.99, denoised_color=None,cmap='jet'):
     """
     Interactive plotting utility for ipython notebook
 
@@ -135,6 +137,10 @@ def nb_view_patches(Yr, A, C, b, f, d1, d2, image_neurons=None, thr=0.99, denois
 
     d1,d2: floats
         dimensions of movie (x and y)
+
+    YrA:   np.ndarray
+        ROI filtered residual as it is given from update_temporal_components
+        If not given, then it is computed (K x T)        
 
     image_neurons: np.ndarray
         image to be overlaid to neurons (for instance the average)
@@ -151,13 +157,17 @@ def nb_view_patches(Yr, A, C, b, f, d1, d2, image_neurons=None, thr=0.99, denois
     colormap = cm.get_cmap(cmap)
     grayp = [mpl.colors.rgb2hex(m) for m in colormap(np.arange(colormap.N))]
     nr, T = C.shape
-    nA2 = np.ravel(A.power(2).sum(0))
+    nA2 = np.ravel(np.power(A,2).sum(0)) if type(A) == np.ndarray else np.ravel(A.power(2).sum(0))
     b = np.squeeze(b)
     f = np.squeeze(f)
-    Y_r = np.array(spdiags(old_div(1, nA2), 0, nr, nr) *
+    if YrA is None:
+        Y_r = np.array(spdiags(old_div(1, nA2), 0, nr, nr) *
                    (A.T * np.matrix(Yr) -
                     (A.T * np.matrix(b[:, np.newaxis])) * np.matrix(f[np.newaxis]) -
                     A.T.dot(A) * np.matrix(C)) + C)
+    else:
+        Y_r = C + YrA
+            
 
     x = np.arange(T)
     z = old_div(np.squeeze(np.array(Y_r[:, :].T)), 100)
@@ -257,8 +267,10 @@ def get_contours(A, dims, thr=0.9):
         x, y = np.mgrid[0:d1:1, 0:d2:1]
 
     coordinates = []
+
     #get the center of mass of neurons( patches )
     cm = np.asarray([center_of_mass(a.toarray().reshape(dims, order='F')) for a in A.T])
+
     #for each patches
     for i in range(nr):
         pars = dict()
@@ -266,9 +278,11 @@ def get_contours(A, dims, thr=0.9):
         patch_data = A.data[A.indptr[i]:A.indptr[i + 1]]
         indx = np.argsort(patch_data)[::-1]
         cumEn = np.cumsum(patch_data[indx]**2)
+
         #we work with normalized values
         cumEn /= cumEn[-1]
         Bvec = np.ones(d)
+
         #we put it in a similar matrix
         Bvec[A.indices[A.indptr[i]:A.indptr[i + 1]][indx]] = cumEn
         Bmat = np.reshape(Bvec, dims, order='F')
@@ -339,6 +353,11 @@ def nb_view_patches3d(Y_r, A, C, dims, image_type='mean', Yr=None,
 
     cmap: string
         name of colormap (e.g. 'viridis') used to plot image_neurons
+
+    Raise:
+    ------
+    ValueError("image_type must be 'mean', 'max' or 'corr'")
+
     """
 
     bokeh.io.curdoc().clear()  # prune old orphaned models, otherwise filesize blows up
@@ -405,12 +424,6 @@ def nb_view_patches3d(Y_r, A, C, dims, image_type='mean', Yr=None,
             cc1[2, i, :len(cor['coordinates'])] = cor['coordinates'][:, 0] + offset1
             cc2[2, i, :len(cor['coordinates'])] = cor['coordinates'][:, 1] + offset2
 
-        # c1x = np.nan * np.zeros(K)
-        # c2x = np.nan * np.zeros(K)
-        # c1y = np.nan * np.zeros(K)
-        # c2y = np.nan * np.zeros(K)
-        # c1z = np.nan * np.zeros(K)
-        # c2z = np.nan * np.zeros(K)
         c1x = cc1[0][0]
         c2x = cc2[0][0]
         c1y = cc1[1][0]
@@ -480,10 +493,10 @@ def nb_view_patches3d(Y_r, A, C, dims, image_type='mean', Yr=None,
         pl.close()
         cc1 = [[(l[:, 0]) for l in n['coordinates']] for n in coors]
         cc2 = [[(l[:, 1]) for l in n['coordinates']] for n in coors]
-        length = np.ravel([map(len, cc) for cc in cc1])
+        length = np.ravel([list(map(len, cc)) for cc in cc1])
         idx = np.cumsum(np.concatenate([[0], length[:-1]]))
-        cc1 = np.concatenate(map(np.concatenate, cc1))
-        cc2 = np.concatenate(map(np.concatenate, cc2))
+        cc1 = np.concatenate(list(map(np.concatenate, cc1)))
+        cc2 = np.concatenate(list(map(np.concatenate, cc2)))
         linit = int(round(coors[0]['CoM'][0]))  # pick initial layer in which first neuron lies
         K = length.max()
         c1 = np.nan * np.zeros(K)
@@ -703,6 +716,7 @@ VIDEO_TAG = """<video controls>
 
 
 def anim_to_html(anim, fps=20):
+    # todo: todocument
     if not hasattr(anim, '_encoded_video'):
         with NamedTemporaryFile(suffix='.mp4') as f:
             anim.save(f.name, fps=fps, extra_args=['-vcodec', 'libx264'])
@@ -726,17 +740,22 @@ def view_patches_bar(Yr, A, C, b, f, d1, d2, YrA=None, img=None):
      -----------
      Yr:    np.ndarray
             movie in format pixels (d) x frames (T)
+
      A:     sparse matrix
                 matrix of spatial components (d x K)
+
      C:     np.ndarray
                 matrix of temporal components (K x T)
+
      b:     np.ndarray
                 spatial background (vector of length d)
 
      f:     np.ndarray
                 temporal background (vector of length T)
+
      d1,d2: np.ndarray
                 frame dimensions
+
      YrA:   np.ndarray
                  ROI filtered residual as it is given from update_temporal_components
                  If not given, then it is computed (K x T)
@@ -965,3 +984,27 @@ def plot_contours(A, Cn, thr=None, thr_method='max', maxthr=0.2, nrgthr=0.9, dis
                 ax.text(cm[i, 1], cm[i, 0], str(i + 1), color=colors)
 
     return coordinates
+
+
+def plot_shapes(Ab, dims, num_comps=15, size=(15, 15), comps_per_row=None,
+                cmap='viridis', smoother=lambda s: median_filter(s, 3)):
+
+    def GetBox(centers, R, dims):
+        D = len(R)
+        box = np.zeros((D, 2), dtype=int)
+        for dd in range(D):
+            box[dd, 0] = max((centers[dd] - R[dd], 0))
+            box[dd, 1] = min((centers[dd] + R[dd] + 1, dims[dd]))
+        return box
+
+    nx = int(sqrt(num_comps) * 1.3) if comps_per_row is None else comps_per_row
+    ny = int(ceil(num_comps / float(nx)))
+    pl.figure(figsize=(nx, ny))
+    for i, a in enumerate(Ab.T[:num_comps]):
+        ax = pl.subplot(ny, nx, i + 1)
+        s = a.toarray().reshape(dims, order='F')
+        box = GetBox(np.array(center_of_mass(s), dtype=np.int16), size, dims)
+        pl.imshow(smoother(s[list(map(lambda a: slice(*a), box))]),
+                  cmap=cmap, interpolation='nearest')
+        ax.axis('off')
+    pl.subplots_adjust(0, 0, 1, 1, .06, .06)

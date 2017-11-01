@@ -5,11 +5,25 @@ Created on Wed Feb 24 18:39:45 2016
 @author: Andrea Giovannucci
 
 """
+from __future__ import print_function
+from builtins import str
+from builtins import range
+try:
+    if __IPYTHON__:
+        print('Debugging!')
+        # this is used for debugging purposes only. allows to reload classes when changed
+        get_ipython().magic('load_ext autoreload')
+        get_ipython().magic('autoreload 2')
+except NameError:
+    print('Not IPYTHON')
+    pass
+
 import numpy as np
 import glob
 import pylab as pl
 import caiman as cm
 from caiman.components_evaluation import evaluate_components
+from caiman.source_extraction.cnmf import cnmf as cnmf
 import os
 #%% start cluster
 c,dview,n_processes = cm.cluster.setup_cluster(backend = 'local',n_processes = None,single_thread = False)
@@ -38,11 +52,11 @@ Cn = cm.movie(images)[:3000].local_correlations(swap_dim=False)
 pl.imshow(Cn,cmap='gray')  
 #%%
 K = 35  # number of neurons expected per patch
-gSig = [7, 7]  # expected half size of neurons
+gSig = [6, 6]  # expected half size of neurons
 merge_thresh = 0.8  # merging threshold, max correlation allowed
 p = 2  # order of the autoregressive system
 cnm = cnmf.CNMF(n_processes, method_init='greedy_roi', k=K, gSig=gSig, merge_thresh=merge_thresh,
-                p=p, dview=dview, Ain=None,method_deconvolution='oasis')
+                p=p, dview=dview, Ain=None,method_deconvolution='oasis',rolling_sum = False)
 cnm = cnm.fit(images)
 A, C, b, f, YrA, sn = cnm.A, cnm.C, cnm.b, cnm.f, cnm.YrA, cnm.sn
 #%%
@@ -53,7 +67,7 @@ Npeaks = 10
 traces = C + YrA
 fitness_raw, fitness_delta, erfc_raw, erfc_delta, r_values, significant_samples = \
     evaluate_components(Y, traces, A, C, b, f,final_frate, remove_baseline=True,
-                                      N=5, robust_std=False, Npeaks=Npeaks, thresh_C=0.3)
+                                      N=5, robust_std=False, Npeaks=Npeaks, thresh_C=0.3, sigma_factor = 3.)
 
 idx_components_r = np.where(r_values >= .85)[0] # filter based on spatial consistency
 idx_components_raw = np.where(fitness_raw < -50)[0] # filter based on transient size
